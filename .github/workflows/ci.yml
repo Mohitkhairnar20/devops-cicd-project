@@ -1,14 +1,43 @@
-- name: Deploy on EC2
-  run: |
-    ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-      set -e
-      cd devops-cicd-project
-      git pull
+name: CI/CD Pipeline - Auto Deploy to EC2
 
-      docker stop devops-app || true
-      docker rm devops-app || true
+on:
+  push:
+    branches:
+      - main
 
-      docker build -t devops-app .
-      docker run -d --restart unless-stopped --name devops-app -p 3000:3000 devops-app
-    EOF
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy on EC2
+        run: |
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            set -e
+            echo "Connected to EC2"
+
+            if [ ! -d devops-cicd-project ]; then
+              git clone https://github.com/Mohitkhairnar20/devops-cicd-project.git
+            fi
+
+            cd devops-cicd-project
+            git pull
+
+            docker stop devops-app || true
+            docker rm devops-app || true
+
+            docker build -t devops-app .
+            docker run -d --restart unless-stopped --name devops-app -p 3000:3000 devops-app
+          EOF
+
 
