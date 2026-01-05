@@ -1,4 +1,4 @@
-name: CI Pipeline with Docker
+name: CI/CD Pipeline - Auto Deploy to EC2
 
 on:
   push:
@@ -6,17 +6,27 @@ on:
       - main
 
 jobs:
-  docker-build:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Build Docker image
+      - name: Setup SSH
         run: |
-          docker build -t devops-app:latest .
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Run Docker container
+      - name: Deploy on EC2
         run: |
-          docker run -d -p 3000:3000 devops-app:latest
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            cd devops-cicd-project || git clone https://github.com/<your-username>/devops-cicd-project.git && cd devops-cicd-project
+            git pull
+            docker stop devops-app || true
+            docker rm devops-app || true
+            docker build -t devops-app .
+            docker run -d --name devops-app -p 3000:3000 devops-app
+          EOF
